@@ -67,13 +67,19 @@ jobs:
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
           ANDROIDSDK: ${{ github.workspace }}/android-sdk
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/build-tools/34.0.0:/usr/local/bin:/usr/bin:/bin
         run: |
           set -x
-          echo "=== ENV ==="
+          echo "=== DIAGNOSTIC ==="
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROIDSDK=$ANDROIDSDK"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "PATH=$PATH"
           echo "pwd=$(pwd)"
+          echo "python=$(which python3)"
+          echo "java=$(which java 2>/dev/null || echo 'not found')"
+          java -version 2>&1 || echo "JAVA_NOT_FOUND"
           echo "=== SDK ==="
           ls -la "$ANDROID_HOME/"
           echo "=== NDK ==="
@@ -88,10 +94,13 @@ jobs:
           cat buildozer.spec 2>/dev/null || echo "(no spec)"
           echo "=== main.py first 10 lines ==="
           head -10 main.py 2>/dev/null || echo "(no main.py)"
-          echo "=== STARTING BUILD ==="
-          python3 -m buildozer android debug 2>&1 | tee buildozer_output.txt
-          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "=== STEP8 OUTPUT START ===" 
+          python3 -m buildozer android debug > buildozer_output.txt 2>&1
+          BUILD_EXIT=$?
+          echo "=== STEP8 OUTPUT END, EXIT=$BUILD_EXIT ===" >> buildozer_output.txt
           echo "=== buildozer EXIT CODE: $BUILD_EXIT ==="
+          echo "=== buildozer_output first 30 lines ==="
+          head -30 buildozer_output.txt || echo "(empty or missing)"
           echo "=== workspace ==="
           ls -la
           echo "=== bin/ ==="
@@ -144,5 +153,5 @@ jobs:
         run: |
           echo "=== step7_output.txt (Step 7 install log) ==="
           cat step7_output.txt 2>/dev/null || echo "(no step7_output.txt)"
-          echo "=== buildozer_output.txt last 100 lines ==="
-          tail -100 buildozer_output.txt 2>/dev/null || echo "(no buildozer_output.txt)"
+          echo "=== buildozer_output.txt (Step 8 full output) ==="
+          cat buildozer_output.txt 2>/dev/null || echo "(no buildozer_output.txt)"
