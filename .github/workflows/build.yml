@@ -54,10 +54,14 @@ jobs:
 
       - name: Install buildozer and python-for-android
         run: |
-          pip3 install --upgrade pip setuptools wheel
-          pip3 install buildozer python-for-android
-          python3 -m buildozer --version
-          pip3 show python-for-android | head -3
+          export HOME=/root
+          set -x
+          pip3 install --upgrade pip setuptools wheel 2>&1 | tee step7_output.txt; echo "PIP_UPGRADE_EXIT=$?" >> step7_output.txt
+          pip3 install buildozer python-for-android 2>&1 | tee -a step7_output.txt; echo "PIP_INSTALL_EXIT=$?" >> step7_output.txt
+          python3 -m buildozer --version 2>&1 | tee -a step7_output.txt; echo "BUILDOZER_CHECK_EXIT=$?" >> step7_output.txt || true
+          pip3 show python-for-android 2>&1 | tee -a step7_output.txt; echo "P4A_SHOW_EXIT=$?" >> step7_output.txt || true
+          pip3 show buildozer 2>&1 | tee -a step7_output.txt; echo "BZR_SHOW_EXIT=$?" >> step7_output.txt || true
+          echo "=== STEP7 COMPLETE ===" >> step7_output.txt
 
       - name: Build debug APK
         env:
@@ -138,5 +142,7 @@ jobs:
       - name: Upload failure log
         if: failure()
         run: |
+          echo "=== step7_output.txt (Step 7 install log) ==="
+          cat step7_output.txt 2>/dev/null || echo "(no step7_output.txt)"
           echo "=== buildozer_output.txt last 100 lines ==="
-          tail -100 buildozer_output.txt 2>/dev/null || echo "(no file)"
+          tail -100 buildozer_output.txt 2>/dev/null || echo "(no buildozer_output.txt)"
