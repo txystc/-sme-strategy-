@@ -67,36 +67,45 @@ jobs:
           echo "=== ENV ==="
           echo "ANDROID_HOME=${{ github.workspace }}/android-sdk"
           ls ${{ github.workspace }}/android-sdk/
-          ls ${{ github.workspace }}/android-sdk/platforms/ || echo "no platforms"
-          ls ${{ github.workspace }}/android-sdk/ndk/ || echo "no ndk"
           echo "=== which python3 ==="
           which python3 || echo "python3 not found"
           echo "=== buildozer via module ==="
           python3 -m buildozer --version 2>&1 || echo "FAIL: buildozer module failed"
-          echo "=== buildozer direct ==="
-          buildozer --version 2>&1 || echo "FAIL: buildozer direct failed"
-          echo "=== p4a version ==="
-          python3 -m pythonforandroid 2>&1 || echo "FAIL: p4a failed"
           echo "=== cd to workspace ==="
           cd ${{ github.workspace }}
           pwd
-          echo "=== list workspace ==="
+          echo "=== list workspace before build ==="
           ls -la
           echo "=== buildozer android debug ==="
-          python3 -m buildozer android debug || echo "BUILD FAILED with exit $?"
-          echo "=== find APK ==="
-          find . -name "*.apk" -type f || echo "no apk found"
+          python3 -m buildozer android debug
+          echo "=== buildozer exit code: $? ==="
+          echo "=== list workspace after build ==="
+          ls -la
+          echo "=== list .buildozer dir ==="
+          ls -la .buildozer/ 2>/dev/null || echo "no .buildozer dir"
+          echo "=== list bin dir ==="
+          ls -la bin/ 2>/dev/null || echo "no bin dir"
+          ls -la bin/debug/ 2>/dev/null || echo "no bin/debug dir"
+          echo "=== find APK anywhere ==="
+          find . -name "*.apk" -type f 2>/dev/null || echo "no apk found"
+          echo "=== find APK in /tmp ==="
+          find /tmp -name "*.apk" -type f 2>/dev/null | head -5
         timeout-minutes: 90
 
       - name: Upload APK
         if: success()
         run: |
-          APK=$(find . -name "*.apk" -type f | head -1)
+          echo "=== Searching for APK ==="
+          APK=$(find . -name "*.apk" -type f 2>/dev/null | head -1)
+          echo "APK=$APK"
           if [ -z "$APK" ]; then
-            echo "ERROR: No APK found"
+            echo "ERROR: No APK found, listing all files"
+            find . -type f 2>/dev/null | head -20
             exit 1
           fi
+          echo "Found APK: $APK"
           cp "$APK" sme-strategy.apk
+          ls -la sme-strategy.apk
           TAG="v$(date +%Y%m%d-%H%M%S)"
           RESPONSE=$(curl -sL \
             -X POST \
@@ -105,7 +114,7 @@ jobs:
             -H "Content-Type: application/json" \
             https://api.github.com/repos/${{ github.repository }}/releases \
             -d "{\"tag_name\":\"$TAG\",\"name\":\"SME策略 App $TAG\",\"draft\":false}")
-          echo "Release: $RESPONSE"
+          echo "Release response: $RESPONSE"
           UPLOAD_URL=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('upload_url','').replace('{?name,label}',''))" 2>/dev/null)
           if [ -n "$UPLOAD_URL" ]; then
             curl -sL -X POST \
@@ -113,4 +122,9 @@ jobs:
               -H "Content-Type: application/octet-stream" \
               --data-binary "@sme-strategy.apk" \
               "$UPLOAD_URL?name=sme-strategy.apk"
+            echo "Upload complete"
+          else
+            echo "ERROR: Could not create release"
+            echo "$RESPONSE"
+            exit 1
           fi
