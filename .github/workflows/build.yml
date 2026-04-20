@@ -1,4 +1,4 @@
-﻿name: Build Android APK
+name: Build Android APK
 
 on:
   push:
@@ -15,22 +15,41 @@ jobs:
         with:
           ref: master
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y python3-pip python3-dev openjdk-17-jdk-headless autoconf libtool pkg-config zlib1g-dev libncurses5-dev libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libswscale-dev libffi-dev libssl-dev cmake git
+          sudo apt install -y \
+            openjdk-17-jdk-headless \
+            autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev \
+            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libswscale-dev libffi-dev libssl-dev cmake git zip
 
       - name: Set JAVA_HOME
         run: echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
 
-      - name: Install Python dependencies
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-kivy-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-kivy-
+
+      - name: Install buildozer
         run: pip3 install --upgrade pip buildozer
 
       - name: Build debug APK
-        run: buildozer android debug --verbose
-        timeout-minutes: 60
+        run: buildozer android debug 2>&1 | tail -100
+        timeout-minutes: 90
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: sme-strategy-apk
