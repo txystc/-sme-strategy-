@@ -28,31 +28,10 @@ jobs:
             autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev \
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-            libswscale-dev libffi-dev libssl-dev cmake git zip unzip wget
+            libswscale-dev libffi-dev libssl-dev cmake git zip unzip
 
-      - name: Download Android SDK
-        run: |
-          mkdir -p $HOME/android-sdk
-          echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROIDNDK=$HOME/android-sdk/ndk/25.2.9519653" >> $GITHUB_ENV
-          echo "ANDROIDAPI=28" >> $GITHUB_ENV
-          echo "PATH=$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
-          echo "=== Downloading Android cmdline-tools ==="
-          cd $HOME/android-sdk
-          wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O cmdline.zip
-          unzip -q cmdline.zip
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
-          ls cmdline-tools/latest/bin/
-
-      - name: Install Android SDK components
-        run: |
-          export ANDROIDSDK=$HOME/android-sdk
-          export PATH="$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools:$PATH"
-          echo "y" | sdkmanager --licenses 2>/dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" "ndk;25.2.9519653"
-          echo "=== SDK installed ==="
-          ls $ANDROIDSDK/platforms/ $ANDROIDSDK/build-tools/
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Install buildozer + python-for-android
         run: |
@@ -61,69 +40,54 @@ jobs:
 
       - name: Build debug APK
         run: |
-          export ANDROIDSDK=$HOME/android-sdk
-          export ANDROIDNDK=$HOME/android-sdk/ndk/25.2.9519653
-          export ANDROIDAPI=28
-          export PATH="$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools:$PATH"
-          echo "=== Environment ==="
-          echo "ANDROIDSDK=$ANDROIDSDK"
-          echo "ANDROIDNDK=$ANDROIDNDK"
-          ls $ANDROIDSDK/
-          echo "=== Running buildozer ==="
-          buildozer android debug 2>&1 || {
-            echo "=== buildozer exit code: $? ==="
-            echo "=== APK search ==="
-            find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-            ls -la bin/ 2>/dev/null || echo "bin/ not found"
-            ls -la build/ 2>/dev/null || echo "build/ not found"
-            exit 1
-          }
-          echo "=== APK search ==="
-          APK_PATH=$(find . -name "*.apk" -type f | head -1)
-          if [ -n "$APK_PATH" ]; then
-            echo "Found APK: $APK_PATH"
-            cp "$APK_PATH" sme-strategy.apk
-            ls -lh sme-strategy.apk
+          buildozer android debug 2>&1
+          EXIT=$?
+          echo "=== buildozer exit code: $EXIT ==="
+          APK=$(find . -name "*.apk" -type f 2>/dev/null | head -1)
+          if [ -n "$APK" ]; then
+            echo "APK found: $APK"
+            cp "$APK" sme-strategy.apk
           else
-            echo "ERROR: No APK found after build!"
-            ls -la bin/ build/ 2>/dev/null
-            exit 1
+            echo "ERROR: No APK found"
+            ls -la bin/ build/ 2>/dev/null || true
           fi
+          exit $EXIT
         timeout-minutes: 90
 
       - name: Create Release
         if: success()
         run: |
-          APK_PATH=$(find . -name "*.apk" -type f | head -1)
-          if [ -n "$APK_PATH" ]; then
-            cp "$APK_PATH" sme-strategy.apk
-            TAG="v$(date +%Y%m%d-%H%M%S)"
-            echo "Creating release: $TAG"
-            curl -sL \
-              -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/${{ github.repository }}/releases \
-              -d "{\"tag_name\":\"$TAG\",\"name\":\"SME策略 App $TAG\",\"draft\":false}"
-            echo "=== Release created ==="
-          fi
+          TAG="v$(date +%Y%m%d-%H%M%S)"
+          echo "Creating release: $TAG"
+          RESPONSE=$(curl -sL \
+            -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/repos/${{ github.repository }}/releases \
+            -d "{\"tag_name\":\"$TAG\",\"name\":\"SME策略 App $TAG\",\"draft\":false}")
+          echo "Release response: $RESPONSE"
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
 
       - name: Upload APK to Release
         if: success()
         run: |
-          APK_PATH=$(find . -name "*.apk" -type f | head -1)
-          if [ -n "$APK_PATH" ]; then
-            RELEASE=$(curl -sL \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/latest")
-            UPLOAD_URL=$(echo "$RELEASE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['upload_url'].replace('{?name,label}',''))")
-            echo "Uploading to: $UPLOAD_URL"
-            curl -sL \
-              -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Content-Type: application/vnd.android.package-archive" \
-              --data-binary "@$APK_PATH" \
-              "$UPLOAD_URL?name=sme-strategy.apk"
-            echo "=== Upload complete ==="
+          APK=$(find . -name "*.apk" -type f | head -1)
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK to upload"
+            exit 1
           fi
+          cp "$APK" sme-strategy.apk
+          RELEASE=$(curl -sL \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+          UPLOAD_URL=$(echo "$RELEASE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['upload_url'].replace('{?name,label}',''))")
+          echo "Uploading to: $UPLOAD_URL"
+          curl -sL \
+            -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@sme-strategy.apk" \
+            "$UPLOAD_URL?name=sme-strategy.apk"
+          echo "=== Done! ==="
