@@ -63,34 +63,29 @@ jobs:
           pip3 list | grep -E "buildozer|python-for"
 
       - name: Build debug APK
-        env:
-          ANDROID_HOME: ${{ github.workspace }}/android-sdk
-          ANDROIDSDK: ${{ github.workspace }}/android-sdk
-          ANDROID_API: "28"
-          ANDROID_NDK_API: "28"
         run: |
-          set -e
-          export ANDROID_HOME=${{ github.workspace }}/android-sdk
-          export ANDROIDSDK=$ANDROID_HOME
-          export ANDROID_API=28
-          export ANDROID_NDK_API=28
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "=== SDK ==="
-          ls $ANDROID_HOME/
-          echo "=== platforms ==="
-          ls $ANDROID_HOME/platforms/ || echo "(none)"
-          echo "=== build-tools ==="
-          ls $ANDROID_HOME/build-tools/ || echo "(none)"
-          echo "=== ndk ==="
-          ls $ANDROID_HOME/ndk/ || echo "(none)"
-          echo "=== buildozer version ==="
-          python3 -m buildozer --version
-          echo "=== buildozer android debug ==="
+          echo "=== ENV ==="
+          echo "ANDROID_HOME=${{ github.workspace }}/android-sdk"
+          ls ${{ github.workspace }}/android-sdk/
+          ls ${{ github.workspace }}/android-sdk/platforms/ || echo "no platforms"
+          ls ${{ github.workspace }}/android-sdk/ndk/ || echo "no ndk"
+          echo "=== which python3 ==="
+          which python3 || echo "python3 not found"
+          echo "=== buildozer via module ==="
+          python3 -m buildozer --version 2>&1 || echo "FAIL: buildozer module failed"
+          echo "=== buildozer direct ==="
+          buildozer --version 2>&1 || echo "FAIL: buildozer direct failed"
+          echo "=== p4a version ==="
+          python3 -m pythonforandroid 2>&1 || echo "FAIL: p4a failed"
+          echo "=== cd to workspace ==="
           cd ${{ github.workspace }}
-          python3 -m buildozer android debug
+          pwd
+          echo "=== list workspace ==="
+          ls -la
+          echo "=== buildozer android debug ==="
+          python3 -m buildozer android debug || echo "BUILD FAILED with exit $?"
           echo "=== find APK ==="
-          find . -name "*.apk" -type f
+          find . -name "*.apk" -type f || echo "no apk found"
         timeout-minutes: 90
 
       - name: Upload APK
