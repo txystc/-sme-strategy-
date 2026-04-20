@@ -28,44 +28,68 @@ jobs:
             autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev \
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-            libswscale-dev libffi-dev libssl-dev cmake git zip
+            libswscale-dev libffi-dev libssl-dev cmake git zip unzip
 
       - name: Set JAVA_HOME
         run: echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-kivy-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-kivy-
-
       - name: Install buildozer
-        run: pip3 install --upgrade pip buildozer
+        run: |
+          pip3 install --upgrade pip
+          pip3 install buildozer
+          pip3 show buildozer | grep Version
 
       - name: Build debug APK
         run: |
-          buildozer android debug 2>&1 | tail -50
-          echo "=== Locating APK ==="
-          APK_PATH=$(find . -name "*.apk" -type f | head -1)
-          if [ -n "$APK_PATH" ]; then
-            echo "Found APK: $APK_PATH"
-            cp "$APK_PATH" ./sme-strategy.apk
-            ls -lh ./sme-strategy.apk
-          else
-            echo "ERROR: No APK found!"
-            ls -la bin/ build/ 2>/dev/null
-          fi
+          buildozer android debug 2>&1
+          echo "=== Build exit code: $? ==="
+          echo "=== APK search ==="
+          find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+          ls -la bin/ 2>/dev/null && echo "bin/ contents:" && ls -la bin/
+          ls -la build/ 2>/dev/null || echo "build/ dir not found"
         timeout-minutes: 90
 
-      - name: Upload to GitHub Release
+      - name: Create Release
         if: success()
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ github.run_number }}
-          name: SME策略 App v${{ github.run_number }}
-          files: ./sme-strategy.apk
-          draft: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK_PATH=$(find . -name "*.apk" -type f | head -1)
+          if [ -n "$APK_PATH" ]; then
+            echo "Found: $APK_PATH"
+            cp "$APK_PATH" sme-strategy.apk
+            ls -lh sme-strategy.apk
+            # Create release via GitHub API
+            TAG="v$(date +%Y%m%d-%H%M%S)"
+            echo "Tag: $TAG"
+            curl -sL \
+              -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/${{ github.repository }}/releases \
+              -d "{\"tag_name\":\"$TAG\",\"name\":\"SME策略 App $TAG\",\"draft\":false}" \
+              > /dev/null
+            echo "Release created: $TAG"
+          else
+            echo "ERROR: No APK found, cannot create release"
+            exit 1
+          fi
+
+      - name: Upload APK to Release
+        if: success()
+        run: |
+          APK_PATH=$(find . -name "*.apk" -type f | head -1)
+          if [ -n "$APK_PATH" ]; then
+            # Get the latest release
+            RELEASE=$(curl -sL \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+            UPLOAD_URL=$(echo "$RELEASE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['upload_url'].replace('{?name,label}',''))")
+            echo "Upload URL: $UPLOAD_URL"
+            curl -sL \
+              -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/vnd.android.package-archive" \
+              --data-binary "@$APK_PATH" \
+              "$UPLOAD_URL?name=sme-strategy.apk"
+            echo "Done!"
+          fi
