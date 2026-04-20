@@ -33,12 +33,10 @@ jobs:
       - name: Download Android SDK
         run: |
           mkdir -p android-sdk
-          cd android-sdk
           wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O cmdline-tools.zip
           unzip -q cmdline-tools.zip
           mkdir -p cmdline-tools/latest
           mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
-          ls -la cmdline-tools/latest/bin/
 
       - name: Install Android SDK components
         run: |
@@ -55,99 +53,27 @@ jobs:
       - name: Install buildozer and python-for-android
         run: |
           export HOME=/root
-          pip3 install --upgrade pip setuptools wheel 2>&1 | tee step7_output.txt
-          pip3 install buildozer python-for-android 2>&1 | tee -a step7_output.txt
-          python3 -m buildozer --version 2>&1 | tee -a step7_output.txt || true
-          pip3 show python-for-android 2>&1 | tee -a step7_output.txt || true
-          pip3 show buildozer 2>&1 | tee -a step7_output.txt || true
+          pip3 install --upgrade pip setuptools wheel
+          pip3 install buildozer python-for-android
 
       - name: Build debug APK
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
           ANDROIDSDK: ${{ github.workspace }}/android-sdk
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/build-tools/34.0.0:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         run: |
-          echo "=== DIAGNOSTIC ==="
+          set -x
+          echo "PWD=$(pwd)"
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROIDSDK=$ANDROIDSDK"
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "pwd=$(pwd)"
+          echo "java=$(which java)"
+          java -version 2>&1
           echo "python=$(which python3)"
-          java -version 2>&1 || echo "JAVA_NOT_FOUND"
-          echo "=== SDK ==="
-          ls -la "$ANDROID_HOME/"
-          echo "=== NDK ==="
-          ls "$ANDROID_HOME/ndk/" 2>/dev/null || echo "(no NDK)"
-          echo "=== build-tools ==="
-          ls "$ANDROID_HOME/build-tools/" 2>/dev/null || echo "(no build-tools)"
-          echo "=== project files ==="
-          ls -la
-          echo "=== buildozer.spec ==="
-          cat buildozer.spec 2>/dev/null || echo "(no spec)"
-          echo "=== main.py first 5 ==="
-          head -5 main.py 2>/dev/null || echo "(no main.py)"
+          python3 --version
+          echo "buildozer=$(python3 -c 'import buildozer; print(buildozer.__version__)' 2>&1)"
+          echo "p4a=$(python3 -c 'import pythonforandroid; print(pythonforandroid.__version__)' 2>&1)"
+          echo "ndk=$(ls $ANDROID_HOME/ndk/ 2>/dev/null || echo none)"
+          echo "bt=$(ls $ANDROID_HOME/build-tools/ 2>/dev/null || echo none)"
+          echo "spec_head=$(head -20 buildozer.spec 2>/dev/null || echo no_spec)"
           echo "=== BUILD START ==="
-          python3 -m buildozer android debug > buildozer_output.txt 2>&1
-          BUILD_EXIT=$?
-          echo "=== BUILD END, EXIT=$BUILD_EXIT ===" >> buildozer_output.txt
-          echo "=== workspace ==="
-          ls -la
-          echo "=== bin/ ==="
-          ls -la bin/ 2>/dev/null || echo "(no bin)"
-          echo "=== find APK ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "no apk"
-          echo "=== output first 30 ==="
-          head -30 buildozer_output.txt 2>/dev/null || echo "(empty)"
-          echo "=== output last 30 ==="
-          tail -30 buildozer_output.txt 2>/dev/null || echo "(empty)"
-          if [ "$BUILD_EXIT" != "0" ]; then
-            echo "BUILD FAILED exit=$BUILD_EXIT"
-            exit 1
-          fi
-          echo "BUILD SUCCESS"
-
-      - name: Upload install log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: step7-install-log
-          path: step7_output.txt
-          retention-days: 1
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: step8-build-log
-          path: buildozer_output.txt
-          retention-days: 1
-
-      - name: Upload APK
-        if: success()
-        run: |
-          echo "=== Search for APK ==="
-          APK=$(find . -name "*.apk" -type f 2>/dev/null | head -1)
-          echo "APK=$APK"
-          if [ -z "$APK" ]; then
-            echo "ERROR: No APK found"
-            exit 1
-          fi
-          cp "$APK" sme-strategy.apk
-          TAG="v$(date +%Y%m%d-%H%M%S)"
-          echo "=== Create release $TAG ==="
-          RESP=$(curl -sL -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Content-Type: application/json" \
-            https://api.github.com/repos/${{ github.repository }}/releases \
-            -d "{\"tag_name\":\"$TAG\",\"name\":\"SME $TAG\",\"draft\":false}")
-          echo "Release: $RESP"
-          UPLOAD_URL=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('upload_url','').replace('{?name,label}',''))" 2>/dev/null)
-          if [ -n "$UPLOAD_URL" ]; then
-            curl -sL -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary "@sme-strategy.apk" \
-              "$UPLOAD_URL?name=sme-strategy.apk"
-            echo "Upload done"
-          fi
+          python3 -m buildozer android debug 2>&1 || true
+          echo "=== BUILD DONE ==="
