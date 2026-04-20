@@ -52,62 +52,45 @@ jobs:
             "platforms;android-28" \
             "build-tools;34.0.0" \
             "platform-tools" \
-            "ndk;25.2.9519653" || echo "Some components failed"
-          echo "=== Installed components ==="
+            "ndk;25.2.9519653"
+          echo "=== Installed ==="
           sdkmanager --list_installed
 
       - name: Install buildozer + python-for-android
         run: |
           pip3 install --upgrade pip setuptools wheel
           pip3 install buildozer python-for-android
-          echo "=== pip packages ==="
           pip3 list | grep -E "buildozer|python-for"
 
       - name: Build debug APK
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
           ANDROIDSDK: ${{ github.workspace }}/android-sdk
-          ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/25.2.9519653
           ANDROID_API: "28"
           ANDROID_NDK_API: "28"
         run: |
+          set -e
           export ANDROID_HOME=${{ github.workspace }}/android-sdk
           export ANDROIDSDK=$ANDROID_HOME
-          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
           export ANDROID_API=28
           export ANDROID_NDK_API=28
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-          
-          echo "=== Environment ==="
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          echo "ANDROID_API=$ANDROID_API"
-          echo "PATH=$PATH"
-          
-          echo "=== SDK contents ==="
+          echo "=== SDK ==="
           ls $ANDROID_HOME/
-          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms"
-          ls $ANDROID_HOME/build-tools/ 2>/dev/null || echo "No build-tools"
-          ls $ANDROID_HOME/ndk/ 2>/dev/null || echo "No NDK"
-          
+          echo "=== platforms ==="
+          ls $ANDROID_HOME/platforms/ || echo "(none)"
+          echo "=== build-tools ==="
+          ls $ANDROID_HOME/build-tools/ || echo "(none)"
+          echo "=== ndk ==="
+          ls $ANDROID_HOME/ndk/ || echo "(none)"
           echo "=== buildozer version ==="
-          python3 -m buildozer --version 2>&1 || buildozer --version 2>&1 || echo "buildozer not found"
-          
-          echo "=== python-for-android version ==="
-          python3 -m pythonforandroid 2>&1 || echo "p4a not found"
-          
-          echo "=== Running buildozer android debug ==="
-          python3 -m buildozer android debug 2>&1 || {
-            EXIT=$?
-            echo "=== buildozer exit code: $EXIT ==="
-            ls -la .buildozer/ 2>/dev/null || echo ".buildozer not found"
-            cat .buildozer/*.log 2>/dev/null || echo "No logs"
-            exit $EXIT
-          }
-          
-          echo "=== Looking for APK ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-          ls -la bin/ 2>/dev/null || echo "bin/ not found"
+          python3 -m buildozer --version
+          echo "=== buildozer android debug ==="
+          cd ${{ github.workspace }}
+          python3 -m buildozer android debug
+          echo "=== find APK ==="
+          find . -name "*.apk" -type f
         timeout-minutes: 90
 
       - name: Upload APK
