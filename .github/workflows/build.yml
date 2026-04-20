@@ -47,18 +47,25 @@ jobs:
       - name: Build debug APK
         run: |
           buildozer android debug 2>&1 | tail -50
-          echo "=== Build output ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
-          ls -la bin/ 2>/dev/null || echo "bin/ not found"
-          ls -la build/ 2>/dev/null || echo "build/ not found"
+          echo "=== Locating APK ==="
+          APK_PATH=$(find . -name "*.apk" -type f | head -1)
+          if [ -n "$APK_PATH" ]; then
+            echo "Found APK: $APK_PATH"
+            cp "$APK_PATH" ./sme-strategy.apk
+            ls -lh ./sme-strategy.apk
+          else
+            echo "ERROR: No APK found!"
+            ls -la bin/ build/ 2>/dev/null
+          fi
         timeout-minutes: 90
 
-      - name: Find and upload APK
+      - name: Upload to GitHub Release
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: softprops/action-gh-release@v2
         with:
-          name: sme-strategy-apk
-          path: |
-            bin/*.apk
-            build/*.apk
-            *.apk
+          tag_name: v${{ github.run_number }}
+          name: SME策略 App v${{ github.run_number }}
+          files: ./sme-strategy.apk
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
