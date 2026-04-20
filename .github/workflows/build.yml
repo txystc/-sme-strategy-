@@ -52,13 +52,12 @@ jobs:
             "platform-tools" \
             "ndk;25.2.9519653"
 
-      - name: Install buildozer + python-for-android
+      - name: Install buildozer and python-for-android
         run: |
           pip3 install --upgrade pip setuptools wheel
-          pip3 install Cython==0.29.37
           pip3 install buildozer python-for-android
           python3 -m buildozer --version
-          pip3 show python-for-android | head -5
+          pip3 show python-for-android | head -3
 
       - name: Build debug APK
         env:
@@ -66,43 +65,41 @@ jobs:
           ANDROIDSDK: ${{ github.workspace }}/android-sdk
           PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/build-tools/34.0.0:/usr/local/bin:/usr/bin:/bin
         run: |
-          set -x  # echo all commands
-          echo "=== ANDROID_HOME ==="
+          set -x
+          echo "=== ENV ==="
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROIDSDK=$ANDROIDSDK"
           echo "pwd=$(pwd)"
-          echo "=== SDK contents ==="
+          echo "=== SDK ==="
           ls -la "$ANDROID_HOME/"
           echo "=== NDK ==="
           ls "$ANDROID_HOME/ndk/" 2>/dev/null || echo "(no NDK)"
           echo "=== build-tools ==="
           ls "$ANDROID_HOME/build-tools/" 2>/dev/null || echo "(no build-tools)"
-          echo "=== platform-tools ==="
-          ls "$ANDROID_HOME/platform-tools/" 2>/dev/null || echo "(no platform-tools)"
           echo "=== buildozer version ==="
-          python3 -m buildozer --version 2>&1 || echo "buildozer check failed"
-          echo "=== buildozer spec ==="
-          cat buildozer.spec 2>/dev/null || cat spec/buildozer.spec 2>/dev/null || echo "(no spec found)"
-          echo "=== ls project ==="
+          python3 -m buildozer --version 2>&1 || echo "FAILED"
+          echo "=== project files ==="
           ls -la
-          echo "=== STARTING BUILD (capturing output) ==="
-          # Capture buildozer output to file so we can see it in logs
+          echo "=== buildozer.spec ==="
+          cat buildozer.spec 2>/dev/null || echo "(no spec)"
+          echo "=== main.py first 10 lines ==="
+          head -10 main.py 2>/dev/null || echo "(no main.py)"
+          echo "=== STARTING BUILD ==="
           python3 -m buildozer android debug 2>&1 | tee buildozer_output.txt
           BUILD_EXIT=${PIPESTATUS[0]}
           echo "=== buildozer EXIT CODE: $BUILD_EXIT ==="
-          echo "=== workspace after build ==="
+          echo "=== workspace ==="
           ls -la
-          echo "=== .buildozer dir ==="
-          ls -la .buildozer/ 2>/dev/null || echo "(no .buildozer)"
-          echo "=== bin dir ==="
+          echo "=== bin/ ==="
           ls -la bin/ 2>/dev/null || echo "(no bin)"
           echo "=== find APK ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "no apk found"
-          echo "=== buildozer_output.txt last 50 lines ==="
+          find . -name "*.apk" -type f 2>/dev/null || echo "no apk"
+          echo "=== .buildozer ==="
+          ls -la .buildozer/ 2>/dev/null || echo "(no .buildozer)"
+          echo "=== buildozer_output last 50 ==="
           tail -50 buildozer_output.txt 2>/dev/null || echo "(no output)"
-          # Only fail if buildozer itself failed
           if [ "$BUILD_EXIT" != "0" ]; then
-            echo "BUILD FAILED with exit $BUILD_EXIT"
+            echo "BUILD FAILED exit=$BUILD_EXIT"
             exit 1
           fi
           echo "BUILD SUCCESS"
@@ -118,7 +115,6 @@ jobs:
             echo "ERROR: No APK found"
             exit 1
           fi
-          echo "Found: $APK"
           cp "$APK" sme-strategy.apk
           TAG="v$(date +%Y%m%d-%H%M%S)"
           echo "=== Create release $TAG ==="
@@ -127,8 +123,8 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Content-Type: application/json" \
             https://api.github.com/repos/${{ github.repository }}/releases \
-            -d "{\"tag_name\":\"$TAG\",\"name\":\"SME策略 $TAG\",\"draft\":false}")
-          echo "Release response: $RESP"
+            -d "{\"tag_name\":\"$TAG\",\"name\":\"SME $TAG\",\"draft\":false}")
+          echo "Release: $RESP"
           UPLOAD_URL=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('upload_url','').replace('{?name,label}',''))" 2>/dev/null)
           if [ -n "$UPLOAD_URL" ]; then
             curl -sL -X POST \
@@ -137,13 +133,10 @@ jobs:
               --data-binary "@sme-strategy.apk" \
               "$UPLOAD_URL?name=sme-strategy.apk"
             echo "Upload done"
-          else
-            echo "ERROR: No release URL"
-            exit 1
           fi
 
-      - name: Upload build log on failure
+      - name: Upload failure log
         if: failure()
         run: |
-          echo "=== buildozer_output.txt ==="
-          cat buildozer_output.txt 2>/dev/null | tail -100 || echo "(no file)"
+          echo "=== buildozer_output.txt last 100 lines ==="
+          tail -100 buildozer_output.txt 2>/dev/null || echo "(no file)"
