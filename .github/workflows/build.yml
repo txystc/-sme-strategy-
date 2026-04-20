@@ -26,7 +26,9 @@ jobs:
             autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev \
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-            libswscale-dev libffi-dev libssl-dev cmake git zip unzip wget python3-pip
+            libswscale-dev libffi-dev libssl-dev \
+            cmake git zip unzip wget python3-pip \
+            python3-dev python3-venv
 
       - name: Download Android SDK
         run: |
@@ -53,48 +55,57 @@ jobs:
       - name: Install buildozer + python-for-android
         run: |
           pip3 install --upgrade pip setuptools wheel
+          pip3 install Cython==0.29.37
           pip3 install buildozer python-for-android
+          python3 -m buildozer --version
+          pip3 show python-for-android | head -5
 
       - name: Build debug APK
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
           ANDROIDSDK: ${{ github.workspace }}/android-sdk
-          PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/build-tools/34.0.0:${{ runner.os == 'Windows' && 'C:/ProgramData/chocolatey/bin' || '/usr/local/bin:/usr/bin:/bin' }}
+          PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/build-tools/34.0.0:/usr/local/bin:/usr/bin:/bin
         run: |
-          echo "=== ENV CHECK ==="
+          set -x  # echo all commands
+          echo "=== ANDROID_HOME ==="
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROIDSDK=$ANDROIDSDK"
-          echo "PATH=$PATH"
-          echo "ls ANDROID_HOME:"
-          ls "$ANDROID_HOME/"
-          echo "ls platforms:"
-          ls "$ANDROID_HOME/platforms/" || echo "(no platforms)"
-          echo "ls build-tools:"
-          ls "$ANDROID_HOME/build-tools/" || echo "(no build-tools)"
-          echo "ls NDK:"
-          ls "$ANDROID_HOME/ndk/" || echo "(no NDK)"
-          echo "which python3:"
-          which python3
-          echo "buildozer version:"
-          python3 -m buildozer --version || echo "buildozer module check FAILED"
-          echo "=== STARTING BUILD ==="
-          python3 -m buildozer android debug && BUILD_EXIT=0 || BUILD_EXIT=$?
-          echo "=== buildozer EXIT CODE: $BUILD_EXIT ==="
-          echo "=== list workspace ==="
+          echo "pwd=$(pwd)"
+          echo "=== SDK contents ==="
+          ls -la "$ANDROID_HOME/"
+          echo "=== NDK ==="
+          ls "$ANDROID_HOME/ndk/" 2>/dev/null || echo "(no NDK)"
+          echo "=== build-tools ==="
+          ls "$ANDROID_HOME/build-tools/" 2>/dev/null || echo "(no build-tools)"
+          echo "=== platform-tools ==="
+          ls "$ANDROID_HOME/platform-tools/" 2>/dev/null || echo "(no platform-tools)"
+          echo "=== buildozer version ==="
+          python3 -m buildozer --version 2>&1 || echo "buildozer check failed"
+          echo "=== buildozer spec ==="
+          cat buildozer.spec 2>/dev/null || cat spec/buildozer.spec 2>/dev/null || echo "(no spec found)"
+          echo "=== ls project ==="
           ls -la
-          echo "=== list .buildozer dir ==="
-          ls -la .buildozer/ 2>/dev/null || echo "no .buildozer"
-          echo "=== list bin dir ==="
-          ls -la bin/ 2>/dev/null || echo "no bin"
+          echo "=== STARTING BUILD (capturing output) ==="
+          # Capture buildozer output to file so we can see it in logs
+          python3 -m buildozer android debug 2>&1 | tee buildozer_output.txt
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "=== buildozer EXIT CODE: $BUILD_EXIT ==="
+          echo "=== workspace after build ==="
+          ls -la
+          echo "=== .buildozer dir ==="
+          ls -la .buildozer/ 2>/dev/null || echo "(no .buildozer)"
+          echo "=== bin dir ==="
+          ls -la bin/ 2>/dev/null || echo "(no bin)"
           echo "=== find APK ==="
           find . -name "*.apk" -type f 2>/dev/null || echo "no apk found"
-          echo "=== find in home ==="
-          find /home -name "*.apk" -type f 2>/dev/null | head -5 || echo "no apk in /home"
-          # Only exit with build error, not diagnostic error
+          echo "=== buildozer_output.txt last 50 lines ==="
+          tail -50 buildozer_output.txt 2>/dev/null || echo "(no output)"
+          # Only fail if buildozer itself failed
           if [ "$BUILD_EXIT" != "0" ]; then
             echo "BUILD FAILED with exit $BUILD_EXIT"
             exit 1
           fi
+          echo "BUILD SUCCESS"
         timeout-minutes: 90
 
       - name: Upload APK
@@ -130,3 +141,9 @@ jobs:
             echo "ERROR: No release URL"
             exit 1
           fi
+
+      - name: Upload build log on failure
+        if: failure()
+        run: |
+          echo "=== buildozer_output.txt ==="
+          cat buildozer_output.txt 2>/dev/null | tail -100 || echo "(no file)"
