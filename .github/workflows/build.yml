@@ -30,63 +30,84 @@ jobs:
             libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
             libswscale-dev libffi-dev libssl-dev cmake git zip unzip wget python3-pip
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Download Android SDK
+        run: |
+          mkdir -p android-sdk
+          cd android-sdk
+          wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          ls -la cmdline-tools/latest/bin/ || ls -la cmdline-tools/
 
       - name: Install Android SDK components
         run: |
-          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_HOME=$PWD/android-sdk
           export ANDROIDSDK=$ANDROID_HOME
-          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
-          mkdir -p $ANDROID_HOME
-          echo "SDK path: $ANDROID_HOME"
-          ls $ANDROID_HOME/
-          echo "--- Installing SDK components ---"
-          if [ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-            $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-              "platforms;android-28" \
-              "build-tools;34.0.0" \
-              "platform-tools" \
-              "ndk;25.2.9519653" || echo "SDK install had issues"
-          else
-            echo "ERROR: sdkmanager not found at expected path"
-            ls -la $ANDROID_HOME/cmdline-tools/ 2>/dev/null || true
-            ls -la $ANDROID_HOME/ 2>/dev/null || true
-          fi
-          echo "--- SDK contents after install ---"
-          ls $ANDROID_HOME/
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | sdkmanager --licenses 2>/dev/null || true
+          echo "=== Installing components ==="
+          sdkmanager \
+            "platforms;android-28" \
+            "build-tools;34.0.0" \
+            "platform-tools" \
+            "ndk;25.2.9519653" || echo "Some components failed"
+          echo "=== Installed components ==="
+          sdkmanager --list_installed
 
       - name: Install buildozer + python-for-android
         run: |
           pip3 install --upgrade pip setuptools wheel
           pip3 install buildozer python-for-android
+          echo "=== pip packages ==="
+          pip3 list | grep -E "buildozer|python-for"
 
       - name: Build debug APK
+        env:
+          ANDROID_HOME: ${{ github.workspace }}/android-sdk
+          ANDROIDSDK: ${{ github.workspace }}/android-sdk
+          ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/25.2.9519653
+          ANDROID_API: "28"
+          ANDROID_NDK_API: "28"
         run: |
-          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_HOME=${{ github.workspace }}/android-sdk
           export ANDROIDSDK=$ANDROID_HOME
           export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
           export ANDROID_API=28
           export ANDROID_NDK_API=28
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          
           echo "=== Environment ==="
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROIDSDK=$ANDROIDSDK"
-          ls $ANDROID_HOME/ 2>/dev/null
-          echo "=== Checking buildozer ==="
-          which buildozer || echo "buildozer not in PATH"
-          buildozer --version 2>&1 || true
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "ANDROID_API=$ANDROID_API"
+          echo "PATH=$PATH"
+          
+          echo "=== SDK contents ==="
+          ls $ANDROID_HOME/
+          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms"
+          ls $ANDROID_HOME/build-tools/ 2>/dev/null || echo "No build-tools"
+          ls $ANDROID_HOME/ndk/ 2>/dev/null || echo "No NDK"
+          
+          echo "=== buildozer version ==="
+          python3 -m buildozer --version 2>&1 || buildozer --version 2>&1 || echo "buildozer not found"
+          
+          echo "=== python-for-android version ==="
+          python3 -m pythonforandroid 2>&1 || echo "p4a not found"
+          
           echo "=== Running buildozer android debug ==="
-          buildozer android debug 2>&1 || {
+          python3 -m buildozer android debug 2>&1 || {
             EXIT=$?
             echo "=== buildozer exit code: $EXIT ==="
-            find . -name "*.apk" -type f 2>/dev/null && echo "APK found" || echo "No APK found"
-            ls -la bin/ build/ 2>/dev/null || echo "bin/build not found"
+            ls -la .buildozer/ 2>/dev/null || echo ".buildozer not found"
+            cat .buildozer/*.log 2>/dev/null || echo "No logs"
             exit $EXIT
           }
-          echo "=== APK ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "No APK"
+          
+          echo "=== Looking for APK ==="
+          find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+          ls -la bin/ 2>/dev/null || echo "bin/ not found"
         timeout-minutes: 90
 
       - name: Upload APK
