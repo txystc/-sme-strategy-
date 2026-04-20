@@ -21,7 +21,7 @@ jobs:
           sudo apt install -y python3-pip python3-dev openjdk-17-jdk-headless autoconf libtool pkg-config zlib1g-dev libncurses5-dev libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libswscale-dev libffi-dev libssl-dev cmake git
 
       - name: Set JAVA_HOME
-        run: echo 'JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64' >> 
+        run: echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
 
       - name: Install Python dependencies
         run: pip3 install --upgrade pip buildozer
