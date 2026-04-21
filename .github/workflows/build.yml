@@ -17,12 +17,10 @@ jobs:
 
       - name: Build with buildozer Docker
         run: |
-          set -e
-          docker run --rm -v "$PWD:/app" -w /app ghcr.io/kivy/buildozer:latest buildozer android debug > buildozer_output.txt 2>&1 || true
-          echo "=== Build Output ==="
-          cat buildozer_output.txt
-          echo "=== Check APK ==="
-          find . -name "*.apk" || echo "No APK found"
+          docker run --rm -v "$PWD:/app" -w /app ghcr.io/kivy/buildozer:latest buildozer android debug > buildozer_output.txt 2>&1
+          echo "=== Exit code: $? ==="
+          echo "=== APK check ==="
+          find . -name "*.apk" -type f -exec ls -lh {} \;
 
       - name: Upload build log
         uses: actions/upload-artifact@v4
@@ -32,9 +30,9 @@ jobs:
           retention-days: 3
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: sme-strategy-apk
           path: bin/*.apk
           retention-days: 1
+          if-no-files-found: error
