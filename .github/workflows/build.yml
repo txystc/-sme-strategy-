@@ -24,21 +24,38 @@ jobs:
         run: |
           pip3 install --user buildozer
           pip3 install --user cython==0.29.36
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          export PATH="$PATH:$HOME/.local/bin"
-          which buildozer || echo "buildozer NOT found"
-          buildozer version || echo "version failed"
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "HOME=$HOME"
+          echo "PATH=$PATH"
+          which buildozer || { echo "ERROR: buildozer not found"; exit 1; }
+          buildozer --version || { echo "ERROR: buildozer --version failed"; exit 1; }
 
       - name: Build with buildozer
         run: |
-          export PATH="$PATH:$HOME/.local/bin"
-          buildozer android debug || echo "BUILD FAILED"
-          echo "=== APK check ==="
-          find . -name "*.apk" -type f -exec ls -lh {} \;
+          export PATH="$HOME/.local/bin:$PATH"
+          set -e
+          echo "=== Accepting Android SDK licenses ==="
+          yes | /home/runner/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager --sdk_root=/home/runner/.buildozer/android/platform/android-sdk --licenses 2>&1 | tail -10
+          echo "=== Starting buildozer build ==="
+          buildozer android debug 2>&1 | tee buildozer_output.log
+          BUILDOZER_EXIT=${PIPESTATUS[0]}
+          echo "=== Build command finished (exit code: $BUILDOZER_EXIT) ==="
+          ls -la bin/ 2>&1 || echo "bin/ not found"
+          if [ "$BUILDOZER_EXIT" -ne 0 ]; then
+            echo "ERROR: buildozer failed with exit code $BUILDOZER_EXIT"
+            tail -100 buildozer_output.log
+            exit 1
+          fi
+          find . -name "*.apk" -type f 2>&1 || echo "No APK found"
+          if ! find . -name "*.apk" -type f -exec test -s {} \; -print | grep -q .; then
+            echo "ERROR: No APK file generated!"
+            exit 1
+          fi
+          echo "=== APK found! ==="
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: sme-strategy-apk
           path: bin/*.apk
