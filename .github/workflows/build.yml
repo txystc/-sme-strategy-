@@ -16,12 +16,12 @@ jobs:
       - name: Build with buildozer Docker
         run: |
           echo "=== Build Start ==="
-          docker run --rm -v "$PWD:/app" -w /app ghcr.io/kivy/buildozer:latest buildozer android debug 2>&1 || true
+          docker run --rm -v "$PWD:/app" -w /app ghcr.io/kivy/buildozer:latest buildozer android debug 2>&1
           echo "=== Build End ==="
           echo "=== Check bin/ ==="
-          ls -la bin/ 2>/dev/null || echo "No bin/"
+          ls -la bin/ || echo "No bin/"
           echo "=== Check APK ==="
-          find . -name "*.apk" 2>/dev/null || echo "No APK"
+          find . -name "*.apk" || echo "No APK"
 
       - name: Upload APK
         if: success()
