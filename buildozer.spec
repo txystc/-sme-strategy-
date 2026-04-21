@@ -4,6 +4,8 @@ title = SME小市值策略
 package.name = sme_strategy
 package.domain = org.qclaw
 
+source.dir = .
+
 source.include_exts = py,png,jpg,kv,atlas,json
 
 version = 0.1
