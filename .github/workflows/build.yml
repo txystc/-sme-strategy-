@@ -30,12 +30,24 @@ jobs:
           which buildozer || { echo "ERROR: buildozer not found"; exit 1; }
           buildozer --version || { echo "ERROR: buildozer --version failed"; exit 1; }
 
+      - name: Accept Android SDK licenses
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+          LICENSES_DIR="$SDK_ROOT/licenses"
+          mkdir -p "$LICENSES_DIR"
+          # Android SDK Platform Tools license
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$LICENSES_DIR/android-sdk-license"
+          printf "\n84831b9409646a918e30573bab4c9c91346d8abd" >> "$LICENSES_DIR/android-sdk-license"
+          # Preview license
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$LICENSES_DIR/android-sdk-preview-license"
+          echo "Licenses written to $LICENSES_DIR:"
+          ls -la "$LICENSES_DIR"
+
       - name: Build with buildozer
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           set -e
-          echo "=== Accepting Android SDK licenses ==="
-          yes | /home/runner/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager --sdk_root=/home/runner/.buildozer/android/platform/android-sdk --licenses 2>&1 | tail -10
           echo "=== Starting buildozer build ==="
           buildozer android debug 2>&1 | tee buildozer_output.log
           BUILDOZER_EXIT=${PIPESTATUS[0]}
