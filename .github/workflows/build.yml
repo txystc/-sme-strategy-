@@ -65,6 +65,7 @@ jobs:
           PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/build-tools/34.0.0:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         run: |
           set -x
+          echo "=== ENV ==="
           echo "PWD=$(pwd)"
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "java=$(which java)"
@@ -72,10 +73,33 @@ jobs:
           echo "python=$(which python3)"
           python3 --version
           echo "buildozer=$(python3 -c 'import buildozer; print(buildozer.__version__)' 2>&1)"
-          echo "p4a=$(python3 -c 'import pythonforandroid; print(pythonforandroid.__version__)' 2>&1)"
-          echo "ndk=$(ls $ANDROID_HOME/ndk/ 2>/dev/null || echo none)"
-          echo "bt=$(ls $ANDROID_HOME/build-tools/ 2>/dev/null || echo none)"
-          echo "spec_head=$(head -20 buildozer.spec 2>/dev/null || echo no_spec)"
+          echo "=== SDK ==="
+          ls -la "$ANDROID_HOME/"
+          echo "=== NDK ==="
+          ls "$ANDROID_HOME/ndk/" 2>/dev/null || echo "(no NDK)"
+          echo "=== build-tools ==="
+          ls "$ANDROID_HOME/build-tools/" 2>/dev/null || echo "(no build-tools)"
+          echo "=== project files ==="
+          ls -la
+          echo "=== buildozer.spec ==="
+          cat buildozer.spec 2>/dev/null || echo "(no spec)"
           echo "=== BUILD START ==="
-          python3 -m buildozer android debug 2>&1 || true
-          echo "=== BUILD DONE ==="
+          python3 -m buildozer android debug 2>&1
+          BUILD_EXIT=$?
+          echo "=== BUILD DONE, EXIT=$BUILD_EXIT ==="
+          echo "=== find APK ==="
+          find . -name "*.apk" -type f 2>/dev/null || echo "no apk"
+          echo "=== bin/ ==="
+          ls -la bin/ 2>/dev/null || echo "(no bin)"
+          if [ "$BUILD_EXIT" != "0" ]; then
+            echo "BUILD FAILED"
+            exit 1
+          fi
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sme-strategy-apk
+          path: bin/*.apk
+          retention-days: 1
