@@ -34,21 +34,25 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
           LICENSES_DIR="$SDK_ROOT/licenses"
+          SDKMGR="$SDK_ROOT/tools/bin/sdkmanager"
+
+          echo "=== SDK Manager path: $SDKMGR ==="
+          ls -la "$SDK_ROOT/" 2>&1 || echo "SDK root not found"
+
           mkdir -p "$LICENSES_DIR"
 
-          # Write standard Android SDK license (SHA hash accepted by Google SDK manager)
+          # Write standard Android SDK license
           printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n84831b9409646a918e30573bab4c9c91346d8abd" > "$LICENSES_DIR/android-sdk-license"
           printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$LICENSES_DIR/android-sdk-preview-license"
           echo "Licenses written:"
           ls -la "$LICENSES_DIR/"
 
-          # Now install platform-tools and build-tools (these are what buildozer tries to install)
-          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
-            --sdk_root="$SDK_ROOT" \
-            "platform-tools" \
-            "build-tools;37.0.0" \
-            "platforms;android-34" 2>&1 | tail -20
-          echo "SDK components installed"
+          # Accept all licenses
+          yes | "$SDKMGR" --sdk_root="$SDK_ROOT" --licenses 2>&1 | tail -5 || true
+
+          # Install required components
+          echo "=== Installing platform-tools and build-tools ==="
+          "$SDKMGR" --sdk_root="$SDK_ROOT" "platform-tools" "build-tools;37.0.0" "platforms;android-34" 2>&1 | tail -10
 
       - name: Build with buildozer
         run: |
