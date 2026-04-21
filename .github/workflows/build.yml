@@ -55,6 +55,7 @@ jobs:
       - name: Install buildozer and python-for-android
         run: |
           export HOME=/root
+          export PATH="$HOME/.local/bin:$PATH"
           pip3 install --upgrade pip setuptools wheel
           pip3 install buildozer python-for-android
           echo "=== buildozer location ==="
@@ -68,7 +69,8 @@ jobs:
           ANDROIDSDK: ${{ github.workspace }}/android-sdk
         run: |
           set -ex
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
+          export HOME=/root
+          export PATH="$HOME/.local/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
           echo "=== ENV ==="
           echo "PWD=$(pwd)"
           echo "ANDROID_HOME=$ANDROID_HOME"
