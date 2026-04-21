@@ -26,23 +26,29 @@ jobs:
           pip3 install --user cython==0.29.36
           export PATH="$HOME/.local/bin:$PATH"
           echo "HOME=$HOME"
-          echo "PATH=$PATH"
           which buildozer || { echo "ERROR: buildozer not found"; exit 1; }
-          buildozer --version || { echo "ERROR: buildozer --version failed"; exit 1; }
+          buildozer --version
 
-      - name: Accept Android SDK licenses
+      - name: Accept Android SDK licenses and install required SDK components
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
           LICENSES_DIR="$SDK_ROOT/licenses"
           mkdir -p "$LICENSES_DIR"
-          # Android SDK Platform Tools license
-          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$LICENSES_DIR/android-sdk-license"
-          printf "\n84831b9409646a918e30573bab4c9c91346d8abd" >> "$LICENSES_DIR/android-sdk-license"
-          # Preview license
+
+          # Write standard Android SDK license (SHA hash accepted by Google SDK manager)
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n84831b9409646a918e30573bab4c9c91346d8abd" > "$LICENSES_DIR/android-sdk-license"
           printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$LICENSES_DIR/android-sdk-preview-license"
-          echo "Licenses written to $LICENSES_DIR:"
-          ls -la "$LICENSES_DIR"
+          echo "Licenses written:"
+          ls -la "$LICENSES_DIR/"
+
+          # Now install platform-tools and build-tools (these are what buildozer tries to install)
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$SDK_ROOT" \
+            "platform-tools" \
+            "build-tools;37.0.0" \
+            "platforms;android-34" 2>&1 | tail -20
+          echo "SDK components installed"
 
       - name: Build with buildozer
         run: |
@@ -51,10 +57,8 @@ jobs:
           echo "=== Starting buildozer build ==="
           buildozer android debug 2>&1 | tee buildozer_output.log
           BUILDOZER_EXIT=${PIPESTATUS[0]}
-          echo "=== Build command finished (exit code: $BUILDOZER_EXIT) ==="
-          ls -la bin/ 2>&1 || echo "bin/ not found"
+          echo "=== Build finished (exit code: $BUILDOZER_EXIT) ==="
           if [ "$BUILDOZER_EXIT" -ne 0 ]; then
-            echo "ERROR: buildozer failed with exit code $BUILDOZER_EXIT"
             tail -100 buildozer_output.log
             exit 1
           fi
