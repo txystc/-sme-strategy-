@@ -15,24 +15,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build with buildozer Docker
+      - name: Install system deps
         run: |
-          docker run --rm -v "$PWD:/app" -w /app ghcr.io/kivy/buildozer:latest buildozer android debug > buildozer_output.txt 2>&1
-          echo "=== Exit code: $? ==="
+          sudo apt-get update
+          sudo apt-get install -y python3-pip python3-dev git zip unzip openjdk-17-jdk
+
+      - name: Install buildozer
+        run: |
+          pip3 install --user buildozer
+          pip3 install --user cython==0.29.36
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          export PATH="$PATH:$HOME/.local/bin"
+          which buildozer || echo "buildozer NOT found"
+          buildozer version || echo "version failed"
+
+      - name: Build with buildozer
+        run: |
+          export PATH="$PATH:$HOME/.local/bin"
+          buildozer android debug || echo "BUILD FAILED"
           echo "=== APK check ==="
           find . -name "*.apk" -type f -exec ls -lh {} \;
 
-      - name: Upload build log
-        uses: actions/upload-artifact@v4
-        with:
-          name: buildozer-log
-          path: buildozer_output.txt
-          retention-days: 3
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: sme-strategy-apk
           path: bin/*.apk
           retention-days: 1
-          if-no-files-found: error
