@@ -57,22 +57,28 @@ jobs:
           export HOME=/root
           pip3 install --upgrade pip setuptools wheel
           pip3 install buildozer python-for-android
+          echo "=== buildozer location ==="
+          which buildozer || echo "buildozer not in PATH"
+          python3 -c "import buildozer; print('buildozer version:', buildozer.__version__)"
+          buildozer --version 2>&1 || echo "buildozer command failed"
 
       - name: Build debug APK
         env:
           ANDROID_HOME: ${{ github.workspace }}/android-sdk
           ANDROIDSDK: ${{ github.workspace }}/android-sdk
-          PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/build-tools/34.0.0:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         run: |
-          set -x
+          set -ex
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
           echo "=== ENV ==="
           echo "PWD=$(pwd)"
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "java=$(which java)"
-          java -version 2>&1
+          echo "PATH=$PATH"
+          echo "java=$(which java 2>/dev/null || echo 'not found')"
+          java -version 2>&1 || true
           echo "python=$(which python3)"
           python3 --version
-          echo "buildozer=$(python3 -c 'import buildozer; print(buildozer.__version__)' 2>&1)"
+          echo "buildozer=$(which buildozer 2>/dev/null || echo 'not in PATH')"
+          buildozer --version 2>&1 || true
           echo "=== SDK ==="
           ls -la "$ANDROID_HOME/"
           echo "=== NDK ==="
@@ -84,7 +90,7 @@ jobs:
           echo "=== buildozer.spec ==="
           cat buildozer.spec 2>/dev/null || echo "(no spec)"
           echo "=== BUILD START ==="
-          python3 -m buildozer android debug 2>&1
+          buildozer android debug 2>&1
           BUILD_EXIT=$?
           echo "=== BUILD DONE, EXIT=$BUILD_EXIT ==="
           echo "=== find APK ==="
