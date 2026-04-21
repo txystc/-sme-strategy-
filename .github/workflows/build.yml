@@ -14,10 +14,29 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build with buildozer Docker
+        id: build
         run: |
-          docker run --rm -v "$PWD:/app" -w /app ghcr.io/kivy/buildozer:latest buildozer android debug
+          set +e
+          docker run --rm -v "$PWD:/app" -w /app ghcr.io/kivy/buildozer:latest buildozer android debug 2>&1 | tee build.log
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 1
+
+      - name: Check build result
+        run: |
+          if [ "${{ steps.build.outputs.exit_code }}" != "0" ]; then
+            echo "Build failed with exit code ${{ steps.build.outputs.exit_code }}"
+            exit 1
+          fi
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: sme-strategy-apk
