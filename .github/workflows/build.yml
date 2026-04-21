@@ -13,96 +13,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Build with buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1.0.0
+        id: buildozer
         with:
-          python-version: '3.10'
-
-      - name: Install system dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y \
-            openjdk-17-jdk-headless \
-            autoconf libtool pkg-config \
-            zlib1g-dev libncurses5-dev \
-            libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-            libswscale-dev libffi-dev libssl-dev \
-            cmake git zip unzip wget python3-pip \
-            python3-dev python3-venv
-
-      - name: Download Android SDK
-        run: |
-          mkdir -p android-sdk
-          cd android-sdk
-          wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
-          ls -la cmdline-tools/latest/bin/
-
-      - name: Install Android SDK components
-        run: |
-          export ANDROID_HOME=$PWD/android-sdk
-          export ANDROIDSDK=$ANDROID_HOME
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --licenses 2>/dev/null || true
-          sdkmanager \
-            "platforms;android-28" \
-            "build-tools;34.0.0" \
-            "platform-tools" \
-            "ndk;25.2.9519653"
-
-      - name: Install buildozer and python-for-android
-        run: |
-          pip3 install --upgrade pip setuptools wheel
-          pip3 install buildozer python-for-android
-          echo "=== buildozer location ==="
-          which buildozer || echo "buildozer not in PATH"
-          python3 -c "import buildozer; print('buildozer version:', buildozer.__version__)"
-          buildozer --version 2>&1 || echo "buildozer command failed"
-
-      - name: Build debug APK
-        env:
-          ANDROID_HOME: ${{ github.workspace }}/android-sdk
-          ANDROIDSDK: ${{ github.workspace }}/android-sdk
-        run: |
-          set -ex
-          export PATH="/root/.local/bin:$HOME/.local/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
-          echo "=== ENV ==="
-          echo "PWD=$(pwd)"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "PATH=$PATH"
-          echo "java=$(which java 2>/dev/null || echo 'not found')"
-          java -version 2>&1 || true
-          echo "python=$(which python3)"
-          python3 --version
-          echo "buildozer=$(which buildozer 2>/dev/null || echo 'not in PATH')"
-          buildozer --version 2>&1 || true
-          echo "=== SDK ==="
-          ls -la "$ANDROID_HOME/"
-          echo "=== NDK ==="
-          ls "$ANDROID_HOME/ndk/" 2>/dev/null || echo "(no NDK)"
-          echo "=== build-tools ==="
-          ls "$ANDROID_HOME/build-tools/" 2>/dev/null || echo "(no build-tools)"
-          echo "=== project files ==="
-          ls -la
-          echo "=== buildozer.spec ==="
-          cat buildozer.spec 2>/dev/null || echo "(no spec)"
-          echo "=== BUILD START ==="
-          buildozer android debug 2>&1
-          BUILD_EXIT=$?
-          echo "=== BUILD DONE, EXIT=$BUILD_EXIT ==="
-          echo "=== find APK ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "no apk"
-          echo "=== bin/ ==="
-          ls -la bin/ 2>/dev/null || echo "(no bin)"
-          if [ "$BUILD_EXIT" != "0" ]; then
-            echo "BUILD FAILED"
-            exit 1
-          fi
+          command: buildozer android debug
+          workdir: .
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: sme-strategy-apk
